@@ -1,69 +1,77 @@
-from secp256k1 import curve,scalar_mult
-from bip import generate_keys_from_mnemonic, Bip39MnemonicGenerator, mnemonic_to_xpub, Bip44Changes, Bip44Coins, get_public_key_from_xpub
+from secp256k1 import curve,scalar_mult, point_add
+from bip import generate_keys_from_mnemonic, Bip39MnemonicGenerator, mnemonic_to_xpub, Bip44Changes, Bip44Coins, get_public_key_from_xpub, ecdsa_sign, ecdsa_verify
 import random
+from hashlib import sha256
+from aes import encrypt_aes, decrypt_aes
 
 print("Basepoint:\t", curve.g)
 
-# Create mnemonic
-mnemonic_generator = Bip39MnemonicGenerator()
-mnemonic = mnemonic_generator.FromWordsNumber(12)
+# Master device-> Create mnemonic
+mnemonic_generator = Bip39MnemonicGenerator() # mnemonic of the master device
+mnemonic = "uphold album symbol kiss gift sadness shock ginger dignity pumpkin skin junk" #mnemonic_generator.FromWordsNumber(12)
 print("Mnemonic:", mnemonic)
 
-# Get keys
-fixed_path_s = "m/44'/0'/1'/0/1"
-fixed_path = [Bip44Coins.BITCOIN, 1, Bip44Changes.CHAIN_EXT, 1]
-server_priv_key, server_public_key = generate_keys_from_mnemonic(mnemonic, account=1)
-client_priv_key, client_public_key = generate_keys_from_mnemonic(mnemonic, account=2)
 
-# Get root xpub
-master_path_s = "m/44'/0'/0'/0/0"
-root_xpub = mnemonic_to_xpub(mnemonic, master_path_s)
+# Server-> Get keys
+server_path = "m/1/1/1/1/1/1"
+server_priv_key = generate_keys_from_mnemonic(mnemonic, server_path)
+server_pub_key = scalar_mult(server_priv_key, curve.g)
 
-# Get public_keys of server and client from xpub
-get_public_key_from_xpub(root_xpub, derivation_path=fixed_path_s)
 
-# Get session randoms
+# Client-> Get keys
+client_path = "m/2/2/2/2/2/2"
+client_priv_key = generate_keys_from_mnemonic(mnemonic, client_path)
+client_pub_key = scalar_mult(server_priv_key, curve.g)
+
+
+# Server & Client-> Get XPUB
+root_xpub = mnemonic_to_xpub(mnemonic, "m") # Step not required if client already has the root_xpub
+
+
+# Server-> Sign Session Randoms
 server_random  = random.randrange(1, curve.n)
-server_random_message = scalar_mult(server_random, curve.g)
+server_random_pub_key = (server_pub_x, server_pub_y) = scalar_mult(server_random, curve.g)
+server_pub_x_hex, server_pub_y_hex = format(server_pub_x, '064x'), format(server_pub_y, '064x')
+server_random_pubkey_message = f"{server_pub_x_hex}{server_pub_y_hex}"
+server_signature = ecdsa_sign(server_priv_key, server_random_pubkey_message)
 
+# Client-> Sign Session Randoms
 client_random  = random.randrange(1, curve.n)
-client_random_message = scalar_mult(client_random, curve.g)
+client_random_pub_key = (client_pub_x, client_pub_y) = scalar_mult(client_random, curve.g)
+client_pub_x_hex, client_pub_y_hex = format(server_pub_x, '064x'), format(client_pub_y, '064x')
+client_random_pubkey_message = f"{client_pub_x_hex}{client_pub_y_hex}"
+client_signature = ecdsa_sign(client_priv_key, client_random_pubkey_message)
 
-# Sign session random messages at server and client
+# Client-> Verify Server Session Randoms 
+derived_server_public_key = get_public_key_from_xpub(root_xpub, server_path)
+is_server_to_client_data_valid = ecdsa_verify(derived_server_public_key, server_random_pubkey_message, server_signature)
+print("Sesssion key sent from server to client is", is_server_to_client_data_valid)
 
+derived_server_random_pubkey = int(server_random_pubkey_message[:64], 16), int(server_random_pubkey_message[64:], 16)
 
-Bob_send = scalar_mult(y, a_pub) # (y) aG
-Bob_send = scalar_mult(b, Bob_send) # (yb) aG
+x, y = scalar_mult(client_priv_key, derived_server_random_pubkey) # r2*r1.G
+client_session_aes_key = int(x).to_bytes(32, "big")
+x, y = point_add(client_random_pub_key, derived_server_random_pubkey) # r2.G + r1.G
+client_session_id = int(sha256(f"{x}{y}".encode()).hexdigest(), 16).to_bytes(32, "big")[:16] # same would be derived at the server side
+print("Client key =======", client_session_aes_key.hex())
+print("Client iv ========", client_session_id.hex())
 
+message_sent_to_server = encrypt_aes(b"secret_message", client_session_aes_key, client_session_id)
 
-Alice_send = scalar_mult(x, b_pub) # (x) bG
-Alice_send = scalar_mult(a, Alice_send) # (xa) bG
+# Server-> Verify Session Randoms & Decrypt message
+derived_client_public_key = get_public_key_from_xpub(root_xpub, client_path)
+is_client_to_server_data_valid = ecdsa_verify(derived_client_public_key, client_random_pubkey_message, client_signature)
+print("Sesssion key sent from client to server is", is_client_to_server_data_valid)
 
+derived_client_random_pubkey = int(client_random_pubkey_message[:64], 16), int(client_random_pubkey_message[64:], 16)
 
-k_a = scalar_mult(x, Bob_send) # x (yb) aG
-k_b = scalar_mult(y, Alice_send) # y ( xa) bG
+# x, y = scalar_mult(server_priv_key, derived_client_random_pubkey) # r2*r1.G
+# server_session_aes_key = int(x).to_bytes(32, "big")
+# x, y = point_add(client_random_pub_key, derived_client_random_pubkey) # r1.G + r2.G
+# server_session_id = int(sha256(f"{x}{y}".encode()).hexdigest(), 16).to_bytes(32, "big")[:16] # same would be derived at the client side
+# print("Server key =======", client_session_aes_key.hex())
+# print("Srever iv ========", client_session_id.hex())
 
-print("\nAlice\'s secret key (a):\t", a)
-print("Alice\'s public key:\t", a_pub)
-print("\nBob\'s secret key (b):\t", b)
-print("Bob\'s public key:\t", b_pub)
+# message_sent_to_client = encrypt_aes(b"secret_message", server_session_aes_key, server_session_id)
 
-print("==========================")
-
-print("\nAlice\'s session secret key (a):\t", x)
-print("Alice\'s  session public key:\t", Alice_send)
-print("\nBob\'s  session secret key (b):\t", y)
-print("Bob\'s  session public key:\t", Bob_send)
-
-print("\n==========================")
-print("Alice\'s shared key:\t", k_a)
-print("Bob\'s shared key:\t", k_b)
-
-print("\n==========================")
-print("abxyG: \t", (k_a[0]))
-
-res=(a*b*x*y) % curve.n
-
-res=scalar_mult(res, curve.g)
-
-print("(abxy)G \t", (res[0]))
+# decrypt_aes(message_sent_to_server, server_session_aes_key, server_session_id)
