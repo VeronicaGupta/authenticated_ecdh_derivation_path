@@ -23,7 +23,7 @@ server_pub_key = scalar_mult(server_priv_key, curve.g)
 
 
 # Client-> Get keys
-pubkey_path_at_server =  "m/1000'/1'/2'/0"
+pubkey_path_at_server =  "m/1000'/1'/0'/0"
 client_path = f"{pubkey_path_at_server}/88/99"
 client_priv_key = generate_keys_from_mnemonic(mnemonic, client_path)
 client_pub_key = scalar_mult(client_priv_key, curve.g)
