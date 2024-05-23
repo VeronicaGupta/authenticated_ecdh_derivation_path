@@ -34,6 +34,9 @@ print("derivation_path of xpub  of saved at client :", xpub_path_at_client)
 print("server_path :", server_path)
 print("client_path :", client_path)
 
+session_rotation_path = "m/66/77"
+
+print("", session_rotation_path)
 
 # Server-> Contains DB mapping device_id -> public key
 
@@ -62,7 +65,7 @@ print("\nOriginal Message ====", message)
 
 # Client-> Verify Server Session Randoms 
 print("\nCLIENT->")
-derived_server_public_key = get_public_key_from_xpub(root_xpub, "m/66/77")
+derived_server_public_key = get_public_key_from_xpub(root_xpub, session_rotation_path)
 is_server_to_client_data_valid = ecdsa_verify(derived_server_public_key, server_random_pubkey_message, server_signature)
 print("Server_Random_Public_Key valid :", is_server_to_client_data_valid)
 
