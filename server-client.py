@@ -34,7 +34,7 @@ print("derivation_path of xpub  of saved at client :", xpub_path_at_client)
 print("server_path :", server_path)
 print("client_path :", client_path)
 
-session_rotation_path = "m/66/77"
+session_rotation_path = "m/66/77" # updated after every firmware update
 
 print("", session_rotation_path)
 
