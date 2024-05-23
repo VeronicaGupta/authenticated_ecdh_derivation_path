@@ -1,29 +1,28 @@
 from secp256k1 import curve,scalar_mult, point_add
-from bip import generate_keys_from_mnemonic, Bip39MnemonicGenerator, mnemonic_to_xpub, Bip44Changes, Bip44Coins, get_public_key_from_xpub, ecdsa_sign, ecdsa_verify
+from bip import generate_keys_from_mnemonic, Bip39MnemonicGenerator, mnemonic_to_xpub, Bip44Changes, Bip44Coins, get_public_key_from_xpub, ecdsa_sign, ecdsa_verify, get_public_key
 import random
 from hashlib import sha256
 from aes import encrypt_aes, decrypt_aes
 
-print("Basepoint:\t", curve.g)
+# print("Basepoint:\t", curve.g)
 
 # Master device-> Create mnemonic
 mnemonic_generator = Bip39MnemonicGenerator() # mnemonic of the master device
 mnemonic = "uphold album symbol kiss gift sadness shock ginger dignity pumpkin skin junk" #mnemonic_generator.FromWordsNumber(12)
-print("Mnemonic:", mnemonic)
+# print("Mnemonic:", mnemonic)
 
 
 
 
 # Server-> Get keys
-s = 10
-server_path = f"m/{s}/{s}/{s}/{s}/{s}/{s}"
+server_path = "m/1000'/0'/2'/0/20"#f"m/{s}/{s}/{s}/{s}/{s}/{s}"
 server_priv_key = generate_keys_from_mnemonic(mnemonic, server_path)
 server_pub_key = scalar_mult(server_priv_key, curve.g)
 
 
+
 # Client-> Get keys
-s = 20
-client_path = f"m/{s}/{s}/{s}/{s}/{s}/{s}"
+client_path = f"m/1000'/1'/0'/0/10/20" #f"m/{s}/{s}/{s}/{s}/{s}/{s}" # depending on device, an incremental
 client_priv_key = generate_keys_from_mnemonic(mnemonic, client_path)
 client_pub_key = scalar_mult(client_priv_key, curve.g)
 
@@ -31,9 +30,11 @@ client_pub_key = scalar_mult(client_priv_key, curve.g)
 
 
 
-# Server & Client-> Get XPUB
-root_xpub = mnemonic_to_xpub(mnemonic, "m") # Step not required if client already has the root_xpub
+# Client-> Get XPUB
+root_xpub = mnemonic_to_xpub(mnemonic, "m/1000'/0'/2'/0") # Step not required if client already has the root_xpub
+print(root_xpub)
 
+# Server-> Already has device's public key
 
 
 
@@ -54,7 +55,7 @@ client_signature = ecdsa_sign(client_priv_key, client_random_pubkey_message)
 
 
 # Client-> Verify Server Session Randoms 
-derived_server_public_key = get_public_key_from_xpub(root_xpub, server_path)
+derived_server_public_key = get_public_key_from_xpub(root_xpub, "m/20")
 is_server_to_client_data_valid = ecdsa_verify(derived_server_public_key, server_random_pubkey_message, server_signature)
 print("Sesssion key sent from server to client is", is_server_to_client_data_valid)
 
@@ -69,8 +70,8 @@ print("Client iv ========", client_session_id.hex())
 
 
 # Server-> Verify Client Session Randoms
-derived_client_public_key = get_public_key_from_xpub(root_xpub, client_path)
-is_client_to_server_data_valid = ecdsa_verify(derived_client_public_key, client_random_pubkey_message, client_signature)
+saved_client_public_key = get_public_key(mnemonic, client_path) # public key saved at server
+is_client_to_server_data_valid = ecdsa_verify(saved_client_public_key, client_random_pubkey_message, client_signature)
 print("Sesssion key sent from client to server is", is_client_to_server_data_valid)
 
 derived_client_random_pubkey = int(client_random_pubkey_message[:64], 16), int(client_random_pubkey_message[64:], 16)

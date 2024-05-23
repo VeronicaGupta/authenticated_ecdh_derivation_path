@@ -73,11 +73,17 @@ def mnemonic_to_xpub(mnemonic, derivation_path):
     seed = Bip39SeedGenerator(mnemonic).Generate()
     bip32 = BIP32.from_seed(seed)
  
-    root_xpriv = bip32.get_xpriv_from_path(derivation_path)
     root_xpub = bip32.get_xpub_from_path(derivation_path)
 
     return root_xpub
 
+def get_public_key(mnemonic, derivation_path):
+    seed = Bip39SeedGenerator(mnemonic).Generate()
+    bip32 = BIP32.from_seed(seed)
+ 
+    public_key = bip32.get_pubkey_from_path(derivation_path)
+
+    return public_key.hex()
 
 
 from bip32 import BIP32
@@ -91,6 +97,7 @@ def get_public_key_from_xpub(xpub, derivation_path):
     public_key = bip32.get_pubkey_from_path(derivation_path)
     
     return public_key.hex()
+
 
 # # Example usage
 # xpub = "xpub6GoyY1DVjqFqVFncEnMDJEWtUHv2SNHePSUoghR9Wputo6GvWzv2wk39KM3ApNMFcK5e2BfEiDrZuh5ZqeDSQSa2koTdp8f7nxevLngnHBH"
