@@ -15,26 +15,30 @@ mnemonic = "uphold album symbol kiss gift sadness shock ginger dignity pumpkin s
 
 
 # Server-> Get keys
-server_path = "m/1000'/0'/2'/0/20"#f"m/{s}/{s}/{s}/{s}/{s}/{s}"
+xpub_path_at_client = "m/1000'/0'/2'/0"
+server_path = f"{xpub_path_at_client}/66/77"
 server_priv_key = generate_keys_from_mnemonic(mnemonic, server_path)
 server_pub_key = scalar_mult(server_priv_key, curve.g)
 
 
 
 # Client-> Get keys
-client_path = f"m/1000'/1'/0'/0/10/20" #f"m/{s}/{s}/{s}/{s}/{s}/{s}" # depending on device, an incremental
+pubkey_path_at_server =  "m/1000'/1'/2'/0"
+client_path = f"{pubkey_path_at_server}/88/99"
 client_priv_key = generate_keys_from_mnemonic(mnemonic, client_path)
 client_pub_key = scalar_mult(client_priv_key, curve.g)
 
+print("derivation_path of public_key of device saved at server :", pubkey_path_at_server)
+print("derivation_path of xpub  of saved at client :", xpub_path_at_client)
+
+print("server_path :", server_path)
+print("client_path :", client_path)
 
 
-
+# Server-> Contains DB mapping device_id -> public key
 
 # Client-> Get XPUB
-root_xpub = mnemonic_to_xpub(mnemonic, "m/1000'/0'/2'/0") # Step not required if client already has the root_xpub
-print(root_xpub)
-
-# Server-> Already has device's public key
+root_xpub = mnemonic_to_xpub(mnemonic, xpub_path_at_client) # Step not required if client already has the root_xpub
 
 
 
@@ -53,11 +57,14 @@ client_random_pubkey_message = f"{client_pub_x_hex}{client_pub_y_hex}"
 client_signature = ecdsa_sign(client_priv_key, client_random_pubkey_message)
 
 
+message = b"secret_message"
+print("\nOriginal Message ====", message)
 
 # Client-> Verify Server Session Randoms 
-derived_server_public_key = get_public_key_from_xpub(root_xpub, "m/20")
+print("\nCLIENT->")
+derived_server_public_key = get_public_key_from_xpub(root_xpub, "m/66/77")
 is_server_to_client_data_valid = ecdsa_verify(derived_server_public_key, server_random_pubkey_message, server_signature)
-print("Sesssion key sent from server to client is", is_server_to_client_data_valid)
+print("Server_Random_Public_Key valid :", is_server_to_client_data_valid)
 
 derived_server_random_pubkey = int(server_random_pubkey_message[:64], 16), int(server_random_pubkey_message[64:], 16)
 x, y = scalar_mult(client_random, derived_server_random_pubkey) # r2*r1.G
@@ -65,14 +72,17 @@ client_session_aes_key = int(x).to_bytes(32, "big")
 x, y = point_add(client_random_pub_key, derived_server_random_pubkey) # r2.G + r1.G
 
 client_session_id = int(sha256(f"{x}{y}".encode()).hexdigest(), 16).to_bytes(32, "big")[:16] # same would be derived at the server side
-print("Client key =======", client_session_aes_key.hex())
-print("Client iv ========", client_session_id.hex())
+print("Session_key  :", client_session_aes_key.hex())
+print("Sesssion_id  :", client_session_id.hex())
 
+message_sent_to_server = encrypt_aes(message, client_session_aes_key, client_session_id)
+print("\nClient Encrypted Message ===", message_sent_to_server)
 
 # Server-> Verify Client Session Randoms
+print("\nSERVER->")
 saved_client_public_key = get_public_key(mnemonic, client_path) # public key saved at server
 is_client_to_server_data_valid = ecdsa_verify(saved_client_public_key, client_random_pubkey_message, client_signature)
-print("Sesssion key sent from client to server is", is_client_to_server_data_valid)
+print("Client_Random_Public_Key valid :", is_client_to_server_data_valid)
 
 derived_client_random_pubkey = int(client_random_pubkey_message[:64], 16), int(client_random_pubkey_message[64:], 16)
 x, y = scalar_mult(server_random, derived_client_random_pubkey) # r1*r2.G
@@ -80,16 +90,8 @@ server_session_aes_key = int(x).to_bytes(32, "big")
 x, y = point_add(server_random_pub_key, derived_client_random_pubkey) # r1.G + r2.G
 
 server_session_id = int(sha256(f"{x}{y}".encode()).hexdigest(), 16).to_bytes(32, "big")[:16] # same would be derived at the client side
-print("Server key =======", server_session_aes_key.hex())
-print("Srever iv ========", server_session_id.hex())
+print("Session_key :", server_session_aes_key.hex())
+print("Srever iv  :", server_session_id.hex())
 
-
-
-
-
-# Client-> Send Encrypted message 
-message_sent_to_server = encrypt_aes(b"secret_message", client_session_aes_key, client_session_id)
-
-# Server-> Decrypt Message
 message = decrypt_aes(message_sent_to_server, server_session_aes_key, server_session_id)
-print("Server Decrypted", message)
+print("\nServer Decrypted Message =", message)
