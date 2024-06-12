@@ -130,3 +130,42 @@ def scalar_mult(k, point):
     assert is_on_curve(result)
 
     return result
+
+
+def inverse(b,n):
+    r1=n
+    r2=b
+    t1=0
+    t2=1
+    while(r2>0):
+        q=r1//r2
+        t=t1-q*t2
+        t1=t2
+        t2=t
+        r=r1-q*r2
+        r1=r2
+        r2=r
+    if t1>0: return t1
+    else: return t1+t2
+    
+
+def point_double(point, P):
+    (x,y)=point
+    lam=3*(x**2)*inverse(2*y,P)
+    xsum=lam**2-x*2
+    ysum=lam*(x-xsum)-y
+    return xsum%P, ysum%P
+
+
+def generate_public_key(private_key):
+    global G
+    global P
+    bit=list(private_key)
+    point=(0,0)
+    for i in bit:
+        if i==0:
+            point=point_double(point, P)
+        elif i==1:
+            point=point_double(point, P)
+            point=point_add(point,G, P)
+    return point
